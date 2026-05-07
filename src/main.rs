@@ -14,42 +14,47 @@ struct Image {
     pixels: Vec<Pixel>,
 }
 
-fn parse_p3(contents: &str) -> Image {
-    let mut tokens = contents.split_whitespace();
-    let magic = tokens.next().unwrap();
-    if magic != "P3" {
-        panic!("Unsupported format: {}", magic);
+fn parse(content: &str) -> Option<Image> {
+    let mut tokens = content
+        .lines()
+        .map(|line| {
+            if let Some(idx) = line.find('#') {
+                &line[..idx]
+            } else {
+                line
+            }
+        })
+        .flat_map(|line| line.split_whitespace());
+
+    let mut next_token = || tokens.next();
+
+    if next_token()? != "P3" {
+        return None;
     }
 
-    let width: usize = tokens.next().unwrap().parse().unwrap();
-    let height: usize = tokens.next().unwrap().parse().unwrap();
-    let _max_value: u8 = tokens.next().unwrap().parse().unwrap();
+    let width: usize = next_token()?.parse().ok()?;
+    let height: usize = next_token()?.parse().ok()?;
+    let _max_value: u16 = next_token()?.parse().ok()?;
 
     let mut pixels = Vec::with_capacity(width * height);
-
     for _ in 0..(width * height) {
-        let r: u8 = tokens.next().unwrap().parse().unwrap();
-        let g: u8 = tokens.next().unwrap().parse().unwrap();
-        let b: u8 = tokens.next().unwrap().parse().unwrap();
+        let r: u8 = next_token()?.parse().ok()?;
+        let g: u8 = next_token()?.parse().ok()?;
+        let b: u8 = next_token()?.parse().ok()?;
         pixels.push(Pixel { r, g, b });
     }
 
-    Image {
+    Some(Image {
         width,
         height,
         pixels,
-    }
+    })
 }
 
 fn render(image: &Image) {
     let mut buffer: Vec<u32> = Vec::with_capacity(image.width * image.height);
-
     for pixel in &image.pixels {
-        let r = pixel.r as u32;
-        let g = pixel.g as u32;
-        let b = pixel.b as u32;
-
-        let color = (r << 16) | (g << 8) | b;
+        let color = ((pixel.r as u32) << 16) | ((pixel.g as u32) << 8) | (pixel.b as u32);
         buffer.push(color);
     }
 
@@ -74,9 +79,13 @@ fn render(image: &Image) {
 }
 
 fn main() {
-    let filename = env::args().nth(1).unwrap();
-    let contents = fs::read_to_string(&filename).unwrap();
-
-    let image = parse_p3(&contents);
+    let filename = match env::args().nth(1) {
+        Some(f) => f,
+        None => {
+            return;
+        }
+    };
+    let content = fs::read_to_string(filename).unwrap();
+    let image = parse(&content).unwrap();
     render(&image);
 }
